@@ -2,10 +2,12 @@ const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const BORDER = 4;
 const CROSS_SCORE = 8;
+const MISSILE_SCORE = 1;
 
 let player = createPlayer(0, 0);
 let emitters = [];
 let bullets = [];
+let missiles = [];
 let dots = [];
 let cross = null;
 let score = 0;
@@ -97,6 +99,8 @@ function restart() {
   player = createPlayer(w * 0.5, h * 0.5);
   emitters = createEmitters(w, h);
   bullets = [];
+  missiles = [];
+  resetMissileLaunch();
   dots = createDots(emitters);
   clearPops();
   score = 0;
@@ -128,7 +132,9 @@ function frame(now) {
     if (!cross && score >= CROSS_SCORE) {
       cross = createCross(player, w, h);
     }
-    if (crossHit || emitterHit || updateBullets(bullets, player, w, h, dt)) {
+    if (score >= MISSILE_SCORE) launchMissiles(missiles, player, w, h, dt);
+    const missileHit = updateMissiles(missiles, player, fromX, fromY, w, h, dt);
+    if (crossHit || emitterHit || missileHit || updateBullets(bullets, player, w, h, dt)) {
       lost = true;
       clearEnter();
     }
@@ -141,6 +147,7 @@ function frame(now) {
   drawEmitters(ctx, emitters);
   drawCross(ctx, cross);
   drawBullets(ctx, bullets);
+  drawMissiles(ctx, missiles);
   drawPlayer(ctx, player);
   drawPops(ctx);
   drawBorder(w, h);
