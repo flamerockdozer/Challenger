@@ -1,6 +1,8 @@
 const BULLET_COUNT = 36;
 const BULLET_SPEED = 170;
 const BULLET_RADIUS = 4;
+const BULLET_LIFE = 6;
+const BULLET_STALL_SPEED = 40;
 const INITIAL_FIRE_DELAYS = [1.5, 2.25, 3.5];
 const FIRE_INTERVALS = [5, 8, 8];
 const DOT_RATE_BAND = 8;
@@ -94,9 +96,10 @@ function fireEmitter(emitter, bullets, player) {
     bullets.push({
       x: emitter.x,
       y: emitter.y,
-      vx: Math.cos(angle) * BULLET_SPEED,
-      vy: Math.sin(angle) * BULLET_SPEED,
+      vx: Math.cos(angle) * BULLET_SPEED + emitter.vx,
+      vy: Math.sin(angle) * BULLET_SPEED + emitter.vy,
       radius: BULLET_RADIUS,
+      age: 0,
     });
   }
 }
@@ -379,8 +382,13 @@ function updateBullets(bullets, player, width, height, dt) {
     const bullet = bullets[i];
     bullet.x += bullet.vx * dt;
     bullet.y += bullet.vy * dt;
+    bullet.age += dt;
+
+    const stalled =
+      bullet.age >= BULLET_LIFE && Math.hypot(bullet.vx, bullet.vy) < BULLET_STALL_SPEED;
 
     if (
+      stalled ||
       bullet.x + bullet.radius < 0 ||
       bullet.y + bullet.radius < 0 ||
       bullet.x - bullet.radius > width ||

@@ -7,7 +7,7 @@ const MISSILE_SWEEP = 8;
 const MISSILE_SPAWN_PAD = 8;
 const FLAME_LENGTH = 22;
 const FLAME_BASE = 7;
-const MISSILE_SPIN = 7;
+const MISSILE_SPIN = 16;
 
 /** Local space: +x forward, origin at body center. Shared by draw and collision. */
 function buildMissileParts(halfLen, halfThick) {
