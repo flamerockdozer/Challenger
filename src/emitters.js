@@ -368,7 +368,7 @@ function reflectBullet(bullet, player, shieldR, dt) {
     bullet.y = player.y + ny * (hitR + skin) + bullet.vy * remain;
   }
 
-  return deflected && tHit !== null;
+  return tHit !== null || deflected;
 }
 
 /**

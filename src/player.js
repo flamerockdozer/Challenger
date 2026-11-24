@@ -181,3 +181,259 @@ function centerPlayer(player, width, height) {
   player.vx = 0;
   player.vy = 0;
 }
+
+const DEATH_BURST_DURATION = 1.45;
+
+let deathBurst = null;
+let deathSmokeSprite = null;
+
+function deathSmokeSpriteCanvas() {
+  if (deathSmokeSprite) return deathSmokeSprite;
+  const r = 32;
+  const bake = document.createElement("canvas");
+  bake.width = r * 2;
+  bake.height = r * 2;
+  const bctx = bake.getContext("2d");
+  const grad = bctx.createRadialGradient(r, r, 0, r, r, r);
+  grad.addColorStop(0, "rgba(72, 70, 78, 0.92)");
+  grad.addColorStop(0.42, "rgba(48, 46, 54, 0.5)");
+  grad.addColorStop(1, "rgba(28, 28, 36, 0)");
+  bctx.fillStyle = grad;
+  bctx.beginPath();
+  bctx.arc(r, r, r, 0, Math.PI * 2);
+  bctx.fill();
+  deathSmokeSprite = bake;
+  return deathSmokeSprite;
+}
+
+function spawnPlayerDeathBurst(player) {
+  const biasVx = player.vx * 0.35;
+  const biasVy = player.vy * 0.35;
+  const bits = [];
+
+  for (let i = 0; i < 18; i++) {
+    const angle = (i / 18) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+    const speed = 90 + Math.random() * 180;
+    bits.push({
+      kind: "chunk",
+      ox: 0,
+      oy: 0,
+      vx: Math.cos(angle) * speed + biasVx,
+      vy: Math.sin(angle) * speed + biasVy,
+      size: 2 + Math.random() * 5,
+      spin: (Math.random() - 0.5) * 14,
+      rot: Math.random() * Math.PI * 2,
+    });
+  }
+
+  for (let i = 0; i < 22; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 220 + Math.random() * 420;
+    bits.push({
+      kind: "spark",
+      ox: 0,
+      oy: 0,
+      vx: Math.cos(angle) * speed + biasVx * 1.2,
+      vy: Math.sin(angle) * speed + biasVy * 1.2,
+      size: 0.8 + Math.random() * 1.6,
+      life: 0.22 + Math.random() * 0.28,
+      age: 0,
+    });
+  }
+
+  for (let i = 0; i < 10; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 45 + Math.random() * 95;
+    bits.push({
+      kind: "ember",
+      ox: 0,
+      oy: 0,
+      vx: Math.cos(angle) * speed + biasVx * 0.5,
+      vy: Math.sin(angle) * speed + biasVy * 0.5 - 40,
+      size: 1.2 + Math.random() * 2.4,
+    });
+  }
+
+  const smoke = [];
+  for (let i = 0; i < 14; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = Math.random() * player.radius * 1.2;
+    smoke.push({
+      x: player.x + Math.cos(angle) * dist,
+      y: player.y + Math.sin(angle) * dist,
+      age: i * 0.018,
+      life: 0.85 + Math.random() * 0.75,
+      radius0: 6 + Math.random() * 10,
+      radius1: 34 + Math.random() * 38,
+      vx: (Math.random() - 0.5) * 55 + biasVx * 0.25,
+      vy: -28 - Math.random() * 42 + biasVy * 0.2,
+      peak: 0.45 + Math.random() * 0.35,
+    });
+  }
+
+  deathBurst = { x: player.x, y: player.y, radius: player.radius, age: 0, bits, smoke };
+}
+
+function clearPlayerDeathBurst() {
+  deathBurst = null;
+}
+
+function updatePlayerDeathBurst(dt) {
+  if (!deathBurst) return;
+  deathBurst.age += dt;
+
+  const chunkDrag = Math.max(0, 1 - dt * 3.2);
+  const emberDrag = Math.max(0, 1 - dt * 2.4);
+  const sparkDrag = Math.max(0, 1 - dt * 7.5);
+  const smokeDrag = Math.max(0, 1 - dt * 1.1);
+
+  const mainDone = deathBurst.age >= DEATH_BURST_DURATION;
+
+  for (const bit of deathBurst.bits) {
+    if (mainDone) continue;
+    bit.ox += bit.vx * dt;
+    bit.oy += bit.vy * dt;
+    if (bit.kind === "spark") {
+      bit.age += dt;
+      bit.vx *= sparkDrag;
+      bit.vy *= sparkDrag;
+      bit.vy += 420 * dt;
+    } else if (bit.kind === "ember") {
+      bit.vx *= emberDrag;
+      bit.vy *= emberDrag;
+      bit.vy -= 55 * dt;
+    } else {
+      bit.rot += bit.spin * dt;
+      bit.vx *= chunkDrag;
+      bit.vy *= chunkDrag;
+      bit.vy += 180 * dt;
+    }
+  }
+
+  let smokeWrite = 0;
+  const smoke = deathBurst.smoke;
+  for (let i = 0; i < smoke.length; i++) {
+    const puff = smoke[i];
+    puff.age += dt;
+    if (puff.age >= puff.life) continue;
+    puff.x += puff.vx * dt;
+    puff.y += puff.vy * dt;
+    puff.vx *= smokeDrag;
+    puff.vy *= smokeDrag;
+    puff.vy -= 18 * dt;
+    smoke[smokeWrite++] = puff;
+  }
+  smoke.length = smokeWrite;
+
+  if (deathBurst.age >= DEATH_BURST_DURATION && smoke.length === 0) deathBurst = null;
+}
+
+function drawPlayerDeathBurst(ctx) {
+  if (!deathBurst) return;
+
+  const { x, y, radius, age, bits, smoke } = deathBurst;
+  const t = Math.min(1, age / DEATH_BURST_DURATION);
+  const expand = 1 - Math.pow(1 - Math.min(1, age / 0.42), 3.2);
+  const coreFade = Math.max(0, 1 - age / 0.55);
+  const tailFade = Math.max(0, 1 - t * t * 0.85);
+
+  ctx.save();
+
+  const smokeSprite = deathSmokeSpriteCanvas();
+  for (const puff of smoke) {
+    const st = puff.age / puff.life;
+    const fade = (1 - st) * (1 - st * 0.12);
+    const alpha = puff.peak * fade;
+    if (alpha < 0.02) continue;
+    const r = puff.radius0 + (puff.radius1 - puff.radius0) * Math.sqrt(st);
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(smokeSprite, puff.x - r, puff.y - r, r * 2, r * 2);
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.globalCompositeOperation = "lighter";
+
+  const flashAge = age / 0.07;
+  if (flashAge < 1) {
+    const flashA = 1 - flashAge;
+    const flashR = radius * (2.2 + flashAge * 3.5);
+    const flash = ctx.createRadialGradient(x, y, 0, x, y, flashR);
+    flash.addColorStop(0, `rgba(255, 255, 255, ${flashA})`);
+    flash.addColorStop(0.35, `rgba(255, 240, 180, ${flashA * 0.75})`);
+    flash.addColorStop(1, "rgba(255, 120, 40, 0)");
+    ctx.beginPath();
+    ctx.arc(x, y, flashR, 0, Math.PI * 2);
+    ctx.fillStyle = flash;
+    ctx.fill();
+  }
+
+  if (coreFade > 0.02) {
+    const fireR = radius * (1.4 + expand * 7.2);
+    const fire = ctx.createRadialGradient(x, y, 0, x, y, fireR);
+    fire.addColorStop(0, `rgba(255, 248, 220, ${coreFade * 0.95})`);
+    fire.addColorStop(0.18, `rgba(255, 175, 55, ${coreFade * 0.88})`);
+    fire.addColorStop(0.42, `rgba(255, 85, 35, ${coreFade * 0.62})`);
+    fire.addColorStop(0.75, `rgba(255, 50, 25, ${coreFade * 0.18})`);
+    fire.addColorStop(1, "rgba(120, 40, 20, 0)");
+    ctx.beginPath();
+    ctx.arc(x, y, fireR, 0, Math.PI * 2);
+    ctx.fillStyle = fire;
+    ctx.fill();
+  }
+
+  const shockT = age / 0.38;
+  if (shockT < 1) {
+    const shockExpand = 1 - Math.pow(1 - shockT, 2.8);
+    const shockR = radius * (1.5 + shockExpand * 9.5);
+    const shockA = (1 - shockT) * 0.85;
+    ctx.beginPath();
+    ctx.arc(x, y, shockR, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255, 230, 200, ${shockA})`;
+    ctx.lineWidth = Math.max(0.5, 4.5 * (1 - shockT));
+    ctx.stroke();
+  }
+
+  ctx.globalCompositeOperation = "source-over";
+
+  for (const bit of bits) {
+    const px = x + bit.ox;
+    const py = y + bit.oy;
+
+    if (bit.kind === "spark") {
+      if (bit.age >= bit.life) continue;
+      const sf = 1 - bit.age / bit.life;
+      const s = bit.size * sf;
+      ctx.fillStyle = `rgba(255, 245, 200, ${sf * 0.95})`;
+      ctx.beginPath();
+      ctx.arc(px, py, Math.max(0.35, s), 0, Math.PI * 2);
+      ctx.fill();
+      continue;
+    }
+
+    if (bit.kind === "ember") {
+      const s = bit.size * tailFade;
+      const grad = ctx.createRadialGradient(px, py, 0, px, py, s);
+      grad.addColorStop(0, `rgba(255, 200, 90, ${tailFade * 0.9})`);
+      grad.addColorStop(0.55, `rgba(255, 90, 40, ${tailFade * 0.5})`);
+      grad.addColorStop(1, "rgba(80, 40, 30, 0)");
+      ctx.beginPath();
+      ctx.arc(px, py, Math.max(0.5, s), 0, Math.PI * 2);
+      ctx.fillStyle = grad;
+      ctx.fill();
+      continue;
+    }
+
+    const s = bit.size * (0.35 + tailFade * 0.65);
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(bit.rot);
+    const grad = ctx.createLinearGradient(-s, -s, s, s);
+    grad.addColorStop(0, `rgba(255, 214, 160, ${tailFade})`);
+    grad.addColorStop(1, `rgba(90, 32, 18, ${tailFade * 0.7})`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(-s * 0.55, -s * 0.35, s * 1.1, s * 0.7);
+    ctx.restore();
+  }
+
+  ctx.restore();
+}

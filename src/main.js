@@ -102,6 +102,7 @@ function restart() {
   dots = createDots(emitters);
   clearPops();
   clearMissileSmoke();
+  clearPlayerDeathBurst();
   score = 0;
   cross = null;
   lost = false;
@@ -137,9 +138,11 @@ function frame(now) {
     if (crossHit || emitterHit || missileHit || updateBullets(bullets, player, w, h, dt)) {
       lost = true;
       clearEnter();
+      spawnPlayerDeathBurst(player);
     }
   }
 
+  updatePlayerDeathBurst(dt);
   updatePops(dt, dots);
 
   drawBackground(w, h);
@@ -148,7 +151,8 @@ function frame(now) {
   drawCross(ctx, cross);
   drawBullets(ctx, bullets);
   drawMissiles(ctx, missiles);
-  drawPlayer(ctx, player);
+  if (!lost) drawPlayer(ctx, player);
+  drawPlayerDeathBurst(ctx);
   drawPops(ctx);
   drawBorder(w, h);
   if (lost) drawLose(w, h);
