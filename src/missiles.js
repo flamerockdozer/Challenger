@@ -8,8 +8,8 @@ const FLAME_LENGTH = 22;
 const FLAME_BASE = 7;
 const MISSILE_SPIN = 16;
 
-const SMOKE_SPAWN_GAP = 0.026;
-const SMOKE_LIFE = 1.65;
+const SMOKE_SPAWN_GAP = 0.012;
+const SMOKE_LIFE = 3.6;
 const SMOKE_RADIUS_START = 5;
 const SMOKE_RADIUS_END = 28;
 const SMOKE_TAIL_OFFSET = 6;
@@ -43,7 +43,7 @@ function smokePuffSpriteCanvas() {
 }
 
 /** These dot counts spawn a missile. After the last one, every second dot does too. */
-const MISSILE_DOTS = [1,2,3,4, 5, 10, 14, 17];
+const MISSILE_DOTS = [ 5, 10, 14, 17];
 
 /** Local space: +x forward, origin at body center. Shared by draw and collision. */
 function buildMissileParts(halfLen, halfThick) {
@@ -214,12 +214,12 @@ function spawnMissileSmokePuff(missile) {
     radius1: SMOKE_RADIUS_END * (0.85 + Math.random() * 0.3),
     vx: backX * drift + (Math.random() - 0.5) * 14,
     vy: backY * drift + (Math.random() - 0.5) * 14,
-    peak: 0.42 + Math.random() * 0.22,
+    peak: 0.52 + Math.random() * 0.26,
   });
 }
 
 function updateMissileSmoke(dt) {
-  const decay = 1 - Math.min(1, dt * 2.2);
+  const decay = 1 - Math.min(1, dt * 1.35);
   let write = 0;
   for (let i = 0; i < missileSmoke.length; i++) {
     const puff = missileSmoke[i];
@@ -241,7 +241,7 @@ function drawMissileSmoke(ctx) {
 
   for (const puff of missileSmoke) {
     const t = puff.age / puff.life;
-    const fade = (1 - t) * (1 - t * 0.35);
+    const fade = (1 - t) * (1 - t * 0.18);
     const alpha = puff.peak * fade;
     if (alpha < 0.02) continue;
 
@@ -330,6 +330,7 @@ function updateMissiles(missiles, player, fromX, fromY, width, height, dt) {
     missile.smokeAcc += dt;
     while (missile.smokeAcc >= SMOKE_SPAWN_GAP) {
       missile.smokeAcc -= SMOKE_SPAWN_GAP;
+      spawnMissileSmokePuff(missile);
       spawnMissileSmokePuff(missile);
     }
 
