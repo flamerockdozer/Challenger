@@ -96,8 +96,8 @@ function fireEmitter(emitter, bullets, player) {
     bullets.push({
       x: emitter.x,
       y: emitter.y,
-      vx: Math.cos(angle) * BULLET_SPEED + emitter.vx,
-      vy: Math.sin(angle) * BULLET_SPEED + emitter.vy,
+      vx: Math.cos(angle) * BULLET_SPEED + emitter.vx * 0.5,
+      vy: Math.sin(angle) * BULLET_SPEED + emitter.vy * 0.5,
       radius: BULLET_RADIUS,
       age: 0,
     });

@@ -2,12 +2,14 @@ const MISSILE_LENGTH = 75;
 const MISSILE_WIDTH = 20;
 const MISSILE_SPEED = 520;
 const MISSILE_TURN_RADIUS = 460;
-const MISSILE_INTERVAL = 4;
 const MISSILE_SWEEP = 8;
 const MISSILE_SPAWN_PAD = 8;
 const FLAME_LENGTH = 22;
 const FLAME_BASE = 7;
 const MISSILE_SPIN = 16;
+
+/** These dot counts spawn a missile. After the last one, every second dot does too. */
+const MISSILE_DOTS = [5, 10, 14, 17];
 
 /** Local space: +x forward, origin at body center. Shared by draw and collision. */
 function buildMissileParts(halfLen, halfThick) {
@@ -45,8 +47,6 @@ const MISSILE_REACH = Math.max(
   ...BODY_VERTICES.map(([x, y]) => Math.hypot(x, y)),
   ...FIN_POLYS.flat().map(([x, y]) => Math.hypot(x, y)),
 );
-
-let missileLaunch = 0;
 
 function wrapToPi(angle) {
   const tau = Math.PI * 2;
@@ -150,15 +150,15 @@ function createMissile(player, width, height) {
   };
 }
 
-function resetMissileLaunch() {
-  missileLaunch = 0;
+function dotSpawnsMissile(count) {
+  const last = MISSILE_DOTS[MISSILE_DOTS.length - 1];
+  if (count < last) return MISSILE_DOTS.includes(count);
+  return (count - last) % 2 === 0;
 }
 
-function launchMissiles(missiles, player, width, height, dt) {
-  missileLaunch -= dt;
-  while (missileLaunch <= 0) {
-    missiles.push(createMissile(player, width, height));
-    missileLaunch += MISSILE_INTERVAL;
+function spawnMissilesForDots(missiles, player, width, height, before, after) {
+  for (let count = before + 1; count <= after; count++) {
+    if (dotSpawnsMissile(count)) missiles.push(createMissile(player, width, height));
   }
 }
 
