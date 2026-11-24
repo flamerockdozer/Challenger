@@ -101,6 +101,7 @@ function restart() {
   missiles = [];
   dots = createDots(emitters);
   clearPops();
+  clearMissileSmoke();
   score = 0;
   cross = null;
   lost = false;

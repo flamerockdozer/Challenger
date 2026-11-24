@@ -1,4 +1,4 @@
-const MISSILE_LENGTH = 75;
+const MISSILE_LENGTH = 60;
 const MISSILE_WIDTH = 20;
 const MISSILE_SPEED = 520;
 const MISSILE_TURN_RADIUS = 460;
@@ -8,8 +8,42 @@ const FLAME_LENGTH = 22;
 const FLAME_BASE = 7;
 const MISSILE_SPIN = 16;
 
+const SMOKE_SPAWN_GAP = 0.026;
+const SMOKE_LIFE = 1.65;
+const SMOKE_RADIUS_START = 5;
+const SMOKE_RADIUS_END = 28;
+const SMOKE_TAIL_OFFSET = 6;
+const SMOKE_RGB_CORE = "185, 185, 190";
+const SMOKE_RGB_MID = "148, 148, 155";
+const SMOKE_RGB_EDGE = "112, 112, 118";
+
+const missileSmoke = [];
+let smokePuffSprite = null;
+
+function smokePuffSpriteCanvas() {
+  if (smokePuffSprite) return smokePuffSprite;
+
+  const r = SMOKE_RADIUS_END;
+  const size = r * 2;
+  const bake = document.createElement("canvas");
+  bake.width = size;
+  bake.height = size;
+  const bctx = bake.getContext("2d");
+  const grad = bctx.createRadialGradient(r, r, 0, r, r, r);
+  grad.addColorStop(0, `rgba(${SMOKE_RGB_CORE}, 0.95)`);
+  grad.addColorStop(0.45, `rgba(${SMOKE_RGB_MID}, 0.55)`);
+  grad.addColorStop(1, `rgba(${SMOKE_RGB_EDGE}, 0)`);
+  bctx.fillStyle = grad;
+  bctx.beginPath();
+  bctx.arc(r, r, r, 0, Math.PI * 2);
+  bctx.fill();
+
+  smokePuffSprite = bake;
+  return smokePuffSprite;
+}
+
 /** These dot counts spawn a missile. After the last one, every second dot does too. */
-const MISSILE_DOTS = [5, 10, 14, 17];
+const MISSILE_DOTS = [1,2,3,4, 5, 10, 14, 17];
 
 /** Local space: +x forward, origin at body center. Shared by draw and collision. */
 function buildMissileParts(halfLen, halfThick) {
@@ -147,7 +181,76 @@ function createMissile(player, width, height) {
     spin: Math.random() < 0.5 ? -MISSILE_SPIN : MISSILE_SPIN,
     age: 0,
     entered: false,
+    smokeAcc: 0,
   };
+}
+
+function clearMissileSmoke() {
+  missileSmoke.length = 0;
+}
+
+function missileTailWorld(missile) {
+  const tailLocalX = BODY_VERTICES[5][0] - SMOKE_TAIL_OFFSET;
+  const cos = Math.cos(missile.angle);
+  const sin = Math.sin(missile.angle);
+  const spread = (Math.random() - 0.5) * MISSILE_WIDTH * 0.35;
+  return {
+    x: missile.x + tailLocalX * cos - spread * sin,
+    y: missile.y + tailLocalX * sin + spread * cos,
+  };
+}
+
+function spawnMissileSmokePuff(missile) {
+  const { x, y } = missileTailWorld(missile);
+  const backX = -Math.cos(missile.angle);
+  const backY = -Math.sin(missile.angle);
+  const drift = 22 + Math.random() * 28;
+  missileSmoke.push({
+    x,
+    y,
+    age: 0,
+    life: SMOKE_LIFE * (0.82 + Math.random() * 0.36),
+    radius0: SMOKE_RADIUS_START * (0.75 + Math.random() * 0.5),
+    radius1: SMOKE_RADIUS_END * (0.85 + Math.random() * 0.3),
+    vx: backX * drift + (Math.random() - 0.5) * 14,
+    vy: backY * drift + (Math.random() - 0.5) * 14,
+    peak: 0.42 + Math.random() * 0.22,
+  });
+}
+
+function updateMissileSmoke(dt) {
+  const decay = 1 - Math.min(1, dt * 2.2);
+  let write = 0;
+  for (let i = 0; i < missileSmoke.length; i++) {
+    const puff = missileSmoke[i];
+    puff.age += dt;
+    if (puff.age >= puff.life) continue;
+    puff.x += puff.vx * dt;
+    puff.y += puff.vy * dt;
+    puff.vx *= decay;
+    puff.vy *= decay;
+    missileSmoke[write++] = puff;
+  }
+  missileSmoke.length = write;
+}
+
+function drawMissileSmoke(ctx) {
+  if (!missileSmoke.length) return;
+
+  const sprite = smokePuffSpriteCanvas();
+
+  for (const puff of missileSmoke) {
+    const t = puff.age / puff.life;
+    const fade = (1 - t) * (1 - t * 0.35);
+    const alpha = puff.peak * fade;
+    if (alpha < 0.02) continue;
+
+    const radius = puff.radius0 + (puff.radius1 - puff.radius0) * Math.sqrt(t);
+    const size = radius * 2;
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(sprite, puff.x - radius, puff.y - radius, size, size);
+  }
+  ctx.globalAlpha = 1;
 }
 
 function dotSpawnsMissile(count) {
@@ -224,6 +327,12 @@ function updateMissiles(missiles, player, fromX, fromY, width, height, dt) {
       missile.roll = destRoll;
     }
 
+    missile.smokeAcc += dt;
+    while (missile.smokeAcc >= SMOKE_SPAWN_GAP) {
+      missile.smokeAcc -= SMOKE_SPAWN_GAP;
+      spawnMissileSmokePuff(missile);
+    }
+
     if (!missile.entered) {
       if (!missileFullyOffscreen(missile, width, height)) missile.entered = true;
     } else if (missileFullyOffscreen(missile, width, height)) {
@@ -231,6 +340,7 @@ function updateMissiles(missiles, player, fromX, fromY, width, height, dt) {
     }
   }
 
+  updateMissileSmoke(dt);
   return hitPlayer;
 }
 
@@ -304,6 +414,8 @@ function drawMissiles(ctx, missiles) {
   const tailX = BODY_VERTICES[5][0];
   const noseX = BODY_VERTICES[0][0];
   const tailGradX = BODY_VERTICES[6][0];
+
+  drawMissileSmoke(ctx);
 
   for (const missile of missiles) {
     ctx.save();
